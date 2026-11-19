@@ -1,10 +1,11 @@
 """Convert EgoHand {left,right}_results.npz into HaWoR-compatible all_hand_meshes.npz."""
 import argparse
+import os
 import re
 import numpy as np
 
 SOMA25_TO_OPENPOSE21 = [0, 1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19, 21, 22, 23, 24]
-SOMA_PATH = "/data/wenwang/HandReconstruction/models/egohand/soma_x/SOMAHand.npz"
+SOMA_PATH = os.environ.get("SOMA_HAND_PATH", "/data/wenwang/HandReconstruction/models/egohand/soma_x/SOMAHand.npz")
 
 
 def convert(egohand_color_dir: str, out_path: str, num_frames: int | None = None, soma_path: str = SOMA_PATH):
@@ -49,5 +50,6 @@ if __name__ == "__main__":
     ap.add_argument("--egohand_color_dir", required=True)
     ap.add_argument("--output", required=True)
     ap.add_argument("--num_frames", type=int, default=None)
+    ap.add_argument("--soma_path", default=SOMA_PATH, help="Path to SOMAHand.npz")
     args = ap.parse_args()
-    convert(args.egohand_color_dir, args.output, args.num_frames)
+    convert(args.egohand_color_dir, args.output, args.num_frames, soma_path=args.soma_path)

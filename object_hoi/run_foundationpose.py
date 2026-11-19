@@ -17,10 +17,10 @@ import trimesh
 from PIL import Image
 from scipy.spatial.transform import Rotation as Rot
 
-FP_ROOT = os.path.expanduser("~/code/HandReconstruction/FoundationPose")
+FP_ROOT = os.environ.get("FP_ROOT", os.path.expanduser("~/code/HandReconstruction/FoundationPose"))
 FP_PYDEPS = os.path.join(FP_ROOT, ".pydeps")
 FP_MYCPP = os.path.join(FP_ROOT, "mycpp", "build")
-DAID_SCRIPTS = os.path.expanduser("~/code/HandReconstruction/do-as-i-do/reconstruction/scripts")
+DAID_SCRIPTS = os.environ.get("DAID_SCRIPTS", os.path.expanduser("~/code/HandReconstruction/do-as-i-do/reconstruction/scripts"))
 sys.path.append(FP_PYDEPS)
 for p in (FP_MYCPP, FP_ROOT, DAID_SCRIPTS):
     if p not in sys.path:
@@ -98,7 +98,8 @@ def main():
     ap.add_argument("--anchor_hand", default="right", choices=["right", "left"])
     ap.add_argument("--init_mode", default="seeded", choices=["seeded", "register"])
     ap.add_argument("--intrinsics_txt", default="", help="Optional 3x3 calibrated intrinsics txt")
-    ap.add_argument("--gpu", default="6")
+    ap.add_argument("--intrinsics_json", default="", help="Optional ViPE/EgoHandWorld intrinsics JSON (fx,fy,cx,cy or 3x3 K)")
+    ap.add_argument("--gpu", default="0")
     ap.add_argument("--max_side", type=int, default=960)
     ap.add_argument("--est_refine_iter", type=int, default=5)
     ap.add_argument("--track_refine_iter", type=int, default=3)
@@ -122,7 +123,20 @@ def main():
     Hd, Wd = int(round(H_full * ds_scale)), int(round(W_full * ds_scale))
 
     K0 = np.load(f"{wdir}/all_frames/000000_intrinsics.npy").astype(np.float32)
-    K_use = np.loadtxt(args.intrinsics_txt).astype(np.float32) if (args.intrinsics_txt and os.path.exists(args.intrinsics_txt)) else K0.copy()
+    if args.intrinsics_json and os.path.exists(args.intrinsics_json):
+        with open(args.intrinsics_json) as f:
+            kd = json.load(f)
+        if "K" in kd:
+            K_use = np.asarray(kd["K"], dtype=np.float32).reshape(3, 3)
+        else:
+            K_use = np.array(
+                [[float(kd["fx"]), 0.0, float(kd["cx"])], [0.0, float(kd["fy"]), float(kd["cy"])], [0.0, 0.0, 1.0]],
+                dtype=np.float32,
+            )
+    elif args.intrinsics_txt and os.path.exists(args.intrinsics_txt):
+        K_use = np.loadtxt(args.intrinsics_txt).astype(np.float32)
+    else:
+        K_use = K0.copy()
     pms = [np.load(f"{wdir}/all_frames/{t:06d}_pointmap.npy").astype(np.float32) for t in range(T)]
     masks = []
     for t in range(T):

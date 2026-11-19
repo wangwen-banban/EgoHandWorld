@@ -6,8 +6,8 @@ import subprocess
 import numpy as np
 from PIL import Image
 
-DAID_RECON = os.path.expanduser("~/code/HandReconstruction/do-as-i-do/reconstruction")
-SAM3_PY = "/data/wenwang/HandReconstruction/envs/daid_sam3/bin/python"
+DAID_RECON = os.environ.get("DAID_RECON", os.path.expanduser("~/code/HandReconstruction/do-as-i-do/reconstruction"))
+SAM3_PY = os.environ.get("SAM3_PY", "/data/wenwang/HandReconstruction/envs/daid_sam3/bin/python")
 SAM3_SCRIPT = f"{DAID_RECON}/scripts/run_sam3_video.py"
 
 

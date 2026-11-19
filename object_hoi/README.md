@@ -87,23 +87,54 @@ object_hoi/
 ├── run_sam3_auto.py            # Automated SAM 3 object mask tracking
 ├── egohand_to_hawor_npz.py     # Converts EgoHandWorld hand outputs into unified hand schema
 ├── run_foundationpose.py       # Core Route 3: FoundationPose 6DoF tracking + K_vipe + EgoHand
-├── eval_taco_obj.py            # 3D object pose metrics evaluator (Cam-CD, F@20, |1-s|, |dZ|, Jitter)
-└── render_gt_vs_baseline.py    # PyTorch3D hand-object 2D overlay & 3D metric trajectory visualizer
+├── render_hoi.py               # General PyTorch3D side-by-side 3D Hand + Object video renderer
+└── eval_taco_obj.py            # 3D object pose metrics evaluator (Cam-CD, F@20, |1-s|, |dZ|, Jitter)
 ```
 
 ### Quick Usage Example
 
 ```bash
 # 1. Convert EgoHandWorld output to unified hand npz
-python object_hoi/egohand_to_hawor_npz.py --egohand_dir <egohand_out> --out <work_dir>/egohand_hands.npz
+python object_hoi/egohand_to_hawor_npz.py \
+  --egohand_color_dir <egohand_color_dir> \
+  --output <work_dir>/egohand_hands.npz
 
 # 2. Run automated SAM 3 object mask tracking
-python object_hoi/run_sam3_auto.py --video <video.mp4> --out_dir <work_dir>
+python object_hoi/run_sam3_auto.py \
+  --video_dir <work_dir> \
+  --prompt "<object_prompt>" \
+  --output_name <object_name> \
+  --gpu 0
 
 # 3. Run Route 3: FoundationPose 6DoF tracking with ViPE intrinsics + EgoHand occlusion
 python object_hoi/run_foundationpose.py \
   --work_dir <work_dir> \
   --obj <object_name> \
+  --hand_source egohand \
+  --init_mode register \
   --hand_npz <work_dir>/egohand_hands.npz \
-  --intrinsics_json <vipe_intrinsics.json>
+  --intrinsics_json <vipe_intrinsics.json> \
+  --out_json <work_dir>/tracking_<object_name>/fp_vipe_egohand.json \
+  --gpu 0
+
+# 4. Render side-by-side 3D Hand + Object overlay video
+python object_hoi/render_hoi.py \
+  --work_dir <work_dir> \
+  --obj <object_name> \
+  --layout_json <work_dir>/tracking_<object_name>/fp_vipe_egohand.json \
+  --hand_npz <work_dir>/egohand_hands.npz \
+  --intrinsics_json <vipe_intrinsics.json> \
+  --output_mp4 <work_dir>/hoi_vis.mp4 \
+  --gpu 0
 ```
+
+---
+
+## 5. Acknowledgements
+
+This 3D Hand-Object Interaction (HOI) extension builds upon and evaluates against the following open-source projects and datasets:
+- [FoundationPose](https://github.com/NVlabs/FoundationPose) (CVPR 2024 — unified 6DoF object pose estimation & tracking)
+- [SAM 3](https://github.com/facebookresearch/sam3) & [SAM 3D Objects](https://github.com/facebookresearch/sam-3d-objects) (automated video object segmentation & single-view 3D object reconstruction)
+- [Do As I Do](https://github.com/do-as-i-do/do-as-i-do) (reference HOI reconstruction pipeline & baseline)
+- [NVIDIA EgoHand](https://github.com/NVlabs/egohand) & [NVIDIA ViPE](https://github.com/nv-tlabs/vipe) (3D egocentric hands & zero-GT-intrinsics metric camera estimation)
+- [TACO Dataset](https://taco2024.github.io/) (egocentric bimanual tool-action-object benchmark)
