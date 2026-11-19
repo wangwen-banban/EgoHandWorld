@@ -18,6 +18,7 @@
 - **Zero-GT-Intrinsics Metric Camera Tracking**: Uses **NVIDIA ViPE** (`pose_only`) by default to jointly estimate camera focal length (`0.4%–2.6%` error on EgoDex) and metric camera trajectory (`R_c2w, t_c2w`) without depending on hand masks.
 - **High-Accuracy 3D Hand Reconstruction**: Pairs ViPE with **NVIDIA EgoHand** (per-frame SOMA-Hand in camera coordinates), reducing world-aligned joint error (**WA-MPJPE**) to **17.7 mm** on EgoDex — **35% lower than HaWoR (CVPR 2025)** and **70% lower than StableHand**, even without GT intrinsics.
 - **Zero False Positives on Hand-Free Videos**: Re-verifies every EgoHand tracked box with raw RT-DETR detection confidence (`score_thr / max_gap / min_frames`), completely eliminating hallucinated hands (`150/150 → 0/0` on outdoor hand-free clips).
+- **3D Hand-Object Interaction (HOI) & Object Visualization** ([`feat/object-hoi`](https://github.com/wangwen-banban/EgoHandWorld/tree/feat/object-hoi)): Extends the pipeline to 6DoF object tracking & joint hand-object 3D visualization (**Route 3 `FoundationPose` + `K_vipe` + `EgoHand`**), cutting 3D Chamfer error by **53%** and 3D jitter by **51%** vs. *Do As I Do*.
 - **Modular & Resumable Engineering**: 4 decoupled subprocess stages with isolated Python environments, `manifest.json` checkpointing, multi-GPU batch scheduling, and an interactive **Web 2D/3D Visualizer**.
 
 ---
@@ -114,6 +115,31 @@ EgoHand's built-in tracker starts tracks at `0.15` confidence and interpolates a
     </td>
   </tr>
 </table>
+
+---
+
+## 3.5 3D Object Reconstruction & Visualization (`feat/object-hoi` Branch)
+
+In addition to bimanual hand reconstruction on `main`, **EgoHandWorld** also supports **zero-GT-intrinsics 3D Object 6DoF Tracking & Joint Hand-Object Visualization** on the dedicated [`feat/object-hoi`](https://github.com/wangwen-banban/EgoHandWorld/tree/feat/object-hoi) branch (see [`object_hoi/README.md`](https://github.com/wangwen-banban/EgoHandWorld/blob/feat/object-hoi/object_hoi/README.md)).
+
+### Best Pipeline: Route 3 (`FoundationPose`) + `K_vipe` + `EgoHand` vs. Baseline (`Do As I Do`)
+
+Evaluated on **TACO** egocentric hand-object manipulation (`brush_bowl`, zero GT intrinsics):
+
+| Method | Intrinsics | **Cam-CD &darr;** | **F@20mm &uarr;** | **Scale Error `\|1-s\|` &darr;** | **3D Jitter &darr;** |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Baseline: Do As I Do (`HaWoR`)** | MoGe (`K_moge`) | 34.8 mm | 28.9% | 18.4% | 19.02 mm |
+| **Baseline: Do As I Do (`EgoHand`)** | MoGe (`K_moge`) | 37.8 mm | 29.5% | 24.1% | 16.73 mm |
+| **Ours: Route 3 + `K_vipe` + `EgoHand`** | **ViPE (`K_vipe`)** | **16.4 mm (-53%)** | **69.6% (+40.7%)** | **10.1%** | **9.30 mm (-51%)** |
+
+*(Across the full 6-sequence / 12-object TACO benchmark, **Route 3 + `K_vipe` + `EgoHand`** achieves **24.90 mm Cam-CD**, **51.7% F@20mm**, and **6.9% `|1-s|`** without GT intrinsics — closing ~80% of the gap to GT-calibrated `K_cal` at `21.52 mm`.)*
+
+> **Why does *Do As I Do* jitter?** Its main bottleneck is **inaccurate depth ($Z$) prediction**: single-frame `MoGe` underestimates focal length by `15%–20%` (pulling depth $Z$ closer and inflating scale error), and independent per-frame 2D silhouette optimization is weakly constrained along the camera ray, causing severe frame-to-frame $Z$ oscillation (`19.02 mm` jitter). Replacing `K_moge` with **ViPE (`K_vipe`)** and per-frame optimization with **FoundationPose** temporal 6DoF tracking + **EgoHand** occlusion handling cuts both 3D error and jitter by **>50%**.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/wangwen-banban/EgoHandWorld/feat/object-hoi/assets/brush_bowl_cmp_2x2.gif" width="88%" alt="3D Hand-Object Visualization: GT vs Do As I Do vs Route 3 + K_vipe + EgoHand"/><br/>
+  <sub><b>TACO <code>brush_bowl</code> 3D Hand-Object Visualization</b> — checkout <code>git checkout feat/object-hoi</code> for full object scripts, benchmarks, and visualizations.</sub>
+</p>
 
 ---
 
