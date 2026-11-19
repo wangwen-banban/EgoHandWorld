@@ -41,7 +41,14 @@ class TestObjectHOI(unittest.TestCase):
     def test_foundationpose_supports_vipe_intrinsics_and_hand_npz(self):
         src = (OBJ_DIR / "run_foundationpose.py").read_text(encoding="utf-8")
         self.assertIn("--hand_npz", src)
+        self.assertIn("--intrinsics_json", src)
         self.assertIn("K_use", src)
+
+    def test_render_hoi_present_and_general(self):
+        src = (OBJ_DIR / "render_hoi.py").read_text(encoding="utf-8")
+        self.assertIn("--intrinsics_json", src)
+        self.assertIn("--output_mp4", src)
+        self.assertNotIn("/tmp/taco_vis", src)
 
 
 if __name__ == "__main__":
