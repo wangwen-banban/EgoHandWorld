@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EgoHandWorld</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1><a href="/">EgoHandWorld</a></h1>
+      <p>上传一段第一视角视频，得到每一帧双手 21 个关节在画面上的位置，以及它们在世界坐标系中的 3D 轨迹。</p>
+    </div>
+    <div class="health" id="health"><span class="dot"></span>正在连接服务…</div>
+  </header>
+
+  <section class="card">
+    <h2>上传视频</h2>
+    <form id="form" class="upload">
+      <label class="drop" id="drop">
+        <input id="video" name="video" type="file" accept="video/*">
+        <b id="dropText">点击选择或拖入视频</b>
+        <small>{{ settings.min_seconds|int }}–{{ settings.max_seconds|int }} 秒，最大 {{ (settings.max_upload_bytes / 1048576)|int }} MB。画面里没有手的帧会标记为无效。</small>
+      </label>
+      <div class="side">
+        <details>
+          <summary>相机内参（可选）</summary>
+          <p class="hint">知道设备标定就填上，单位是原视频像素。不填时自动估计；在 EgoDex 上估计的焦距误差约 1–3%。</p>
+          <div class="kgrid">
+            <label>fx<input type="number" step="any" min="0" name="fx" id="fx"></label>
+            <label>fy<input type="number" step="any" min="0" name="fy" id="fy"></label>
+            <label>cx<input type="number" step="any" min="0" name="cx" id="cx"></label>
+            <label>cy<input type="number" step="any" min="0" name="cy" id="cy"></label>
+          </div>
+        </details>
+        <button id="submit" type="submit" disabled>上传并开始处理</button>
+        <div class="bar" id="bar" hidden><i></i></div>
+        <div class="msg" id="msg" role="status"></div>
+      </div>
+    </form>
+  </section>
+
+  <section>
+    <h2>我提交的任务</h2>
+    <div class="tasks" id="tasks"><div class="empty">这个浏览器还没有提交过任务。</div></div>
+  </section>
+
+  <section>
+    <h2>示例</h2>
+    <div class="cases">
+      {% for c in cases %}
+      <a class="case" href="/t/{{ c.id }}">
+        <img src="/files/{{ c.id }}/poster.jpg" alt="{{ c.title }} 的 2D 结果截图" loading="lazy">
+        <div class="body">
+          <b>{{ c.title }}</b>
+          <span>{{ c.desc }}</span>
+          <div class="tags">
+            <span class="tag">{{ c.frames }} 帧 · {{ c.fps|int }} fps</span>
+            <span class="tag">左手 {{ c.hands.left }} · 右手 {{ c.hands.right }} 帧</span>
+            {% if c.intrinsics %}<span class="tag">内参：{{ c.intrinsics }}</span>{% endif %}
+          </div>
+        </div>
+      </a>
+      {% else %}
+      <div class="empty">还没有示例。</div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <footer>手部：NVIDIA EgoHand（SOMA-Hand，导出 21 关节）。相机内参与轨迹：NVIDIA ViPE。世界坐标系为视频第一帧的相机坐标系，单位米。任务链接是随机生成的，只有拿到链接的人能打开。</footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const KEY = 'ehw_tasks';
+const LABEL = {queued: '排队中', running: '处理中', complete: '已完成', failed: '失败'};
+function myTasks() { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { return []; } }
+function saveTask(id) { try { const t = myTasks().filter(x => x !== id); t.unshift(id); localStorage.setItem(KEY, JSON.stringify(t.slice(0, 50))); } catch (e) {} }
+
+const input = $('video'), drop = $('drop');
+function chosen() {
+  const f = input.files[0];
+  $('dropText').textContent = f ? `${f.name}（${(f.size / 1048576).toFixed(1)} MB）` : '点击选择或拖入视频';
+  $('submit').disabled = !f;
+}
+input.addEventListener('change', chosen);
+['dragover', 'dragenter'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(e => drop.addEventListener(e, () => drop.classList.remove('over')));
+drop.addEventListener('drop', ev => { ev.preventDefault(); if (ev.dataTransfer.files.length) { input.files = ev.dataTransfer.files; chosen(); } });
+
+$('form').addEventListener('submit', ev => {
+  ev.preventDefault();
+  const f = input.files[0];
+  if (!f) return;
+  if (f.size > {{ settings.max_upload_bytes }}) { $('msg').className = 'msg err'; $('msg').textContent = '文件超过大小上限'; return; }
+  const data = new FormData($('form'));
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/tasks');
+  $('bar').hidden = false; $('submit').disabled = true; $('msg').className = 'msg'; $('msg').textContent = '正在上传…';
+  xhr.upload.onprogress = e => { if (e.lengthComputable) $('bar').firstElementChild.style.width = (100 * e.loaded / e.total) + '%'; };
+  xhr.onload = () => {
+    let r = {}; try { r = JSON.parse(xhr.responseText); } catch (e) {}
+    if (xhr.status === 202) { saveTask(r.id); location.href = '/t/' + r.id; return; }
+    $('msg').className = 'msg err'; $('msg').textContent = r.error || ('上传失败（' + xhr.status + '）');
+    $('submit').disabled = false; $('bar').hidden = true;
+  };
+  xhr.onerror = () => { $('msg').className = 'msg err'; $('msg').textContent = '网络错误，上传没有完成'; $('submit').disabled = false; };
+  xhr.send(data);
+});
+
+async function refreshTasks() {
+  const ids = myTasks();
+  if (!ids.length) return;
+  const rows = await Promise.all(ids.map(id => fetch('/api/tasks/' + id).then(r => r.ok ? r.json() : null).catch(() => null)));
+  const box = $('tasks'); box.textContent = '';
+  rows.filter(Boolean).forEach(t => {
+    const a = document.createElement('a'); a.className = 'task'; a.href = '/t/' + t.id;
+    const n = document.createElement('span'); n.className = 'name'; n.textContent = t.name;
+    const m = document.createElement('span'); m.className = 'meta';
+    m.textContent = new Date(t.created * 1000).toLocaleString() + (t.status === 'running' ? ' · ' + t.stage_label : '');
+    const p = document.createElement('span'); p.className = 'pill ' + t.status; p.textContent = LABEL[t.status] || t.status;
+    a.append(n, m, p); box.append(a);
+  });
+  if (!box.children.length) box.innerHTML = '<div class="empty">这个浏览器还没有提交过任务。</div>';
+}
+async function health() {
+  try {
+    const h = await (await fetch('/api/health')).json();
+    $('health').className = 'health ' + (h.worker_alive ? 'ok' : 'bad');
+    $('health').innerHTML = '<span class="dot"></span>' + (h.worker_alive ? `服务正常 · 队列 ${h.queue}` : '后台处理进程未运行');
+  } catch (e) { $('health').className = 'health bad'; $('health').innerHTML = '<span class="dot"></span>无法连接服务'; }
+}
+health(); refreshTasks(); setInterval(() => { health(); refreshTasks(); }, 5000);
+</script>
+</body>
+</html>

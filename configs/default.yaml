@@ -1,0 +1,37 @@
+# EgoHandWorld default config. Paths are absolute on remote92.
+data_root: /data/wenwang            # big files: envs/, checkpoints/, work/, data/
+python:
+  hawor: /data/wenwang/envs/hawor/bin/python      # orchestration, preprocessing, lifting (+ HaWoR camera backend)
+  egohand: /data/wenwang/envs/egohand/bin/python  # EgoHand inference + detection scores
+  vipe: /data/wenwang/envs/vipe/bin/python        # ViPE camera backend
+
+# Camera backend: where camera intrinsics + metric camera trajectory come from.
+#   vipe  (default) NVIDIA ViPE pose_only: GeoCalib init + DROID-style BA that also optimises the focal length,
+#         MoGe-2 metric scale. Does not look at hands, so it works on hand-free videos and needs no intrinsics.
+#   hawor HaWoR's masked DROID-SLAM + Metric3D. Needs given intrinsics; depends on hand detection for its masks.
+camera_backend: vipe
+vipe:
+  src: /home/wangwen/code/third_party_src/vipe
+  torch_home: /data/wenwang/checkpoints/vipe_torchhub
+  hf_home: /data/wenwang/checkpoints/vipe_hf
+  pipeline: pose_only
+  max_frames: 100000000     # ViPE's own default stops at frame 1000
+  # When intrinsics are given, warn if ViPE's focal disagrees by more than this fraction (sanity check).
+  focal_mismatch_warn: 0.10
+
+fps: 30                     # every video is re-encoded to this frame rate first
+gpus: [4, 5, 6, 7]          # launch_batch.py default workers; pass --gpus to use other free cards
+min_free_mb: 16000          # a worker waits until its GPU has this much free memory before starting a video
+
+egohand:
+  dtype: bfloat16
+  perspective_cropping: true
+  save_videos: false        # true -> EgoHand also writes bbox_viz.mp4 / fullimg_overlay.mp4
+
+# Which EgoHand frames count as a real hand. EgoHand's RT-DETR tracker starts tracks at score 0.15 and
+# interpolates every gap, so on a hand-free street video it emitted 150/150 frames per hand. We re-score each
+# emitted box with the raw detector: real hands on EgoDex scored >= 0.76 (p10), hand-free frames <= 0.44.
+validity:
+  score_thr: 0.5            # a frame is a real detection if a detector box (score >= this) has its centre in the hand box
+  max_gap: 5                # gaps up to this many frames between real detections stay valid (EgoHand's interpolation)
+  min_frames: 10            # a hand with fewer real-detection frames than this in the whole video is dropped

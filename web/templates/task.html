@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ case.title if case else '任务结果' }} · EgoHandWorld</title>
+<link rel="stylesheet" href="/static/style.css">
+<script type="importmap">{"imports": {"three": "/static/vendor/three.module.js", "three/addons/": "/static/vendor/"}}</script>
+</head>
+<body>
+<div class="wrap" style="max-width:1400px">
+  <header class="top">
+    <div>
+      <h1><a href="/">EgoHandWorld</a></h1>
+      <p id="subtitle">{% if case %}示例 · {{ case.desc }}{% else %}任务结果{% endif %}</p>
+    </div>
+    <div class="status"><b id="name"></b><span class="pill" id="pill">读取中</span></div>
+  </header>
+
+  <section class="card" id="progress" hidden>
+    <div id="progressText">正在处理…</div>
+    <div class="steps" id="steps"></div>
+    <p class="note" id="progressNote" style="margin-top:10px">可以关掉这个页面，处理会在后台继续；用同一个链接回来查看结果。</p>
+  </section>
+  <div class="errbox" id="error" hidden></div>
+
+  <section id="result" class="resultsec" hidden>
+    <div class="panes">
+      <div class="pane">
+        <div class="head">
+          <div class="tabs"><button class="on" data-v="overlay">2D 关节</button><button data-v="input">原视频</button></div>
+          <div class="legend"><span><i class="sw" style="background:var(--left)"></i>左手</span><span><i class="sw" style="background:var(--right)"></i>右手</span></div>
+        </div>
+        <div class="stage">
+          <video id="v_overlay" muted playsinline preload="auto"></video>
+          <video id="v_input" muted playsinline preload="auto" hidden></video>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="head">
+          <span>世界坐标（拖动旋转，滚轮缩放，右键平移）</span>
+          <div class="legend">
+            <label><input type="checkbox" id="optTrail" checked> 手腕轨迹</label>
+            <label><input type="checkbox" id="optCam" checked> 相机</label>
+            <button class="ghost" id="resetView" type="button">重置视角</button>
+          </div>
+        </div>
+        <div class="stage" id="scene3d"></div>
+      </div>
+    </div>
+    <div class="card controls">
+      <button id="play" type="button">播放</button>
+      <input type="range" id="slider" min="0" max="0" value="0" aria-label="帧">
+      <span class="frame" id="frame">0 / 0</span>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="downloads" id="downloads"></div>
+    <p class="note">世界坐标系是视频第一帧的相机坐标系，单位米，没有对齐重力方向；3D 视图里为了方便观察把 y 轴翻成了向上。只显示判定为真实检测到的手：检测器分数低于 0.5 的帧不显示（不超过 5 帧的短暂漏检会保留）。</p>
+  </section>
+</div>
+
+<script type="module">
+import { startViewer } from '/static/viewer.js';
+const TASK = {{ task_id|tojson }};
+const $ = id => document.getElementById(id);
+const ORDER = ['queued', 'preprocess', 'vipe_camera', 'egohand', 'lift', 'render'];
+const NAMES = {queued: '排队', preprocess: '预处理', vipe_camera: '相机内参与轨迹', egohand: '手部估计', lift: '世界坐标', render: '生成可视化'};
+const LABEL = {queued: '排队中', running: '处理中', complete: '已完成', failed: '失败'};
+let started = false;
+
+function showProgress(t) {
+  $('progress').hidden = false;
+  const cur = ORDER.indexOf(t.stage === 'hawor_camera' ? 'vipe_camera' : t.stage);
+  $('steps').innerHTML = '';
+  ORDER.forEach((s, i) => {
+    const d = document.createElement('span');
+    d.className = 'step' + (i < cur ? ' done' : i === cur ? ' now' : '');
+    d.textContent = NAMES[s]; $('steps').append(d);
+  });
+  let txt = t.status === 'queued' ? `排队中，前面还有 ${Math.max(0, (t.queue_position || 1) - 1)} 个任务` : `正在${t.stage_label}`;
+  if (t.error && t.status === 'queued') txt += `（${t.error}）`;
+  if (t.elapsed_s) txt += ` · 已用时 ${Math.round(t.elapsed_s)} 秒`;
+  $('progressText').textContent = txt;
+}
+
+function stat(k, v) { const d = document.createElement('div'); d.className = 'stat'; d.innerHTML = `<div class="k"></div><div class="v"></div>`; d.firstChild.textContent = k; d.lastChild.textContent = v; return d; }
+
+async function poll() {
+  const r = await fetch('/api/tasks/' + TASK);
+  if (!r.ok) { $('error').hidden = false; $('error').textContent = '找不到这个任务'; return; }
+  const t = await r.json();
+  $('name').textContent = t.name; $('pill').textContent = LABEL[t.status] || t.status; $('pill').className = 'pill ' + t.status;
+  if (t.status === 'failed') { $('progress').hidden = true; $('error').hidden = false; $('error').textContent = '处理失败：' + (t.error || '未知错误'); return; }
+  if (t.status !== 'complete') { showProgress(t); setTimeout(poll, 3000); return; }
+  $('progress').hidden = true;
+  if (started) return;
+  started = true;
+  $('result').hidden = false;
+  const s = t.summary;
+  const box = $('stats');
+  box.append(stat('帧数', `${s.num_frames} 帧 · ${Math.round(s.fps)} fps`));
+  ['left', 'right'].forEach(h => box.append(stat(h === 'left' ? '左手有效帧' : '右手有效帧', `${s.hands[h].valid_frames}（${Math.round(100 * s.hands[h].coverage)}%）`)));
+  const data = await (await fetch(`/files/${TASK}/web.json`)).json();
+  const src = s.intrinsics_source.startsWith('given') ? '用户提供' : (s.intrinsics_source === 'vipe' ? 'ViPE 估计' : s.intrinsics_source);
+  box.append(stat('焦距 fx（' + src + '）', data.K[0][0].toFixed(1) + ' px'));
+  if (s.vipe_fx && src === '用户提供') box.append(stat('ViPE 估计的 fx', s.vipe_fx.toFixed(1) + ' px'));
+  [['overlay.mp4', '2D 叠加视频'], ['result.npz', '完整结果 result.npz'], ['summary.json', 'summary.json'], ['web.json', '可视化数据 web.json']].forEach(([f, n]) => {
+    const a = document.createElement('a'); a.href = `/files/${TASK}/${f}`; a.textContent = n; if (f !== 'overlay.mp4') a.download = ''; $('downloads').append(a);
+  });
+  startViewer({ data, task: TASK, $, statsBox: box });
+}
+poll();
+</script>
+</body>
+</html>

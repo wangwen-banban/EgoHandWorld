@@ -1,0 +1,45 @@
+# OS & editor junk
+.DS_Store
+._*
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Python caches & build artifacts
+__pycache__/
+*.py[cod]
+*.class
+build/
+dist/
+*.egg
+*.egg-info/
+*.so
+*.o
+*.a
+.pytest_cache/
+
+# Runtime outputs & logs
+*.log
+*.pid
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+work/
+
+# Weight symlinks & local model files (populated by scripts/link_weights.sh)
+checkpoints
+third_party/hawor/weights/external
+third_party/hawor/weights/hawor
+third_party/hawor/_DATA/data/mano/MANO_RIGHT.pkl
+third_party/hawor/_DATA/data_left/mano_left/MANO_LEFT.pkl
+third_party/hawor/thirdparty/Metric3D/weights/metric_depth_vit_large_800k.pth
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+*.bin
+
+# Large upstream demo assets not used at runtime
+third_party/hawor/thirdparty/Metric3D/media/
+third_party/hawor/thirdparty/Metric3D/training/kitti_json_files/
