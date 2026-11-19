@@ -247,10 +247,14 @@ Each run writes `<run_dir>/<video_id>/result.npz` and `summary.json`. World coor
 
 ## 7. Acknowledgements
 
-This project builds upon the following open-source works — please refer to their respective repositories and licenses under `third_party/`:
+This project builds upon the following open-source works and benchmarks — please refer to their respective repositories and licenses:
 - [NVIDIA EgoHand](https://github.com/NVlabs/egohand) (3D egocentric hand reconstruction)
-- [NVIDIA ViPE](https://github.com/nv-tlabs/vipe) (metric camera pose & intrinsics estimation)
+- [NVIDIA ViPE](https://github.com/nv-tlabs/vipe) (zero-GT-intrinsics metric camera pose & intrinsics estimation)
 - [HaWoR](https://github.com/ThunderVVV/HaWoR) (optional SLAM camera backend & reference pipeline)
+- [FoundationPose](https://github.com/NVlabs/FoundationPose) (`feat/object-hoi` — unified 6DoF object pose estimation & tracking)
+- [SAM 3](https://github.com/facebookresearch/sam3) & [SAM 3D Objects](https://github.com/facebookresearch/sam-3d-objects) (`feat/object-hoi` — automated object segmentation & single-view 3D object mesh reconstruction)
+- [Do As I Do](https://github.com/do-as-i-do/do-as-i-do) (`feat/object-hoi` — reference HOI reconstruction pipeline & baseline)
+- [TACO Dataset](https://taco2024.github.io/) (`feat/object-hoi` — egocentric bimanual hand-object manipulation benchmark)
 
 ---
 
